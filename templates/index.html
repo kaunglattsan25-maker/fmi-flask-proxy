@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FMI Checker | Premium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h1>Apple FMI Checker</h1>
+                <p>Check Find My iPhone / iPad status instantly</p>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="deviceId" placeholder="Enter SN or IMEI..." autocomplete="off">
+                <button id="checkBtn">Check Status</button>
+            </div>
+
+            <div id="loader" class="loader hidden">
+                <div class="spinner"></div>
+                <p id="loaderText">Fetching session...</p>
+            </div>
+
+            <div id="resultContainer" class="result-container hidden">
+                <div class="result-item">
+                    <span class="label">Device ID:</span>
+                    <span id="resId" class="value">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">FMI Status:</span>
+                    <span id="resStatus" class="chip">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Account:</span>
+                    <span id="resAccount" class="value">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Purchase Date:</span>
+                    <span id="resDate" class="value">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Warranty:</span>
+                    <span id="resWarranty" class="value">-</span>
+                </div>
+            </div>
+
+            <div id="errorBox" class="error-box hidden"></div>
+        </div>
+    </div>
+
+    <script>
+
+        function formatFmiDate(dateStr) {
+            if (!dateStr || dateStr === 'N/A' || dateStr === 'Not provided') return 'N/A';
+            
+            // Expected format: YY.MM.DD (e.g., 21.10.17)
+            const parts = dateStr.split('.');
+            if (parts.length !== 3) return dateStr;
+
+            const year = '20' + parts[0];
+            const monthIdx = parseInt(parts[1], 10) - 1;
+            const day = parts[2];
+
+            const months = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+
+            if (monthIdx < 0 || monthIdx > 11) return dateStr;
+
+            return `${months[monthIdx]} ${day}, ${year}`;
+        }
+
+
+        const checkBtn = document.getElementById('checkBtn');
+        const deviceIdInput = document.getElementById('deviceId');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loaderText');
+        const resultContainer = document.getElementById('resultContainer');
+        const errorBox = document.getElementById('errorBox');
+
+        checkBtn.onclick = async () => {
+            const deviceId = deviceIdInput.value.trim();
+            if (!deviceId) return alert('Please enter SN or IMEI');
+
+            errorBox.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            loader.classList.remove('hidden');
+            loaderText.innerText = 'Processing request...';
+            checkBtn.disabled = true;
+
+            try {
+                const response = await fetch('/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error || 'Server error occurred');
+
+                const res = data.result || {};
+                document.getElementById('resId').innerText = deviceId;
+                
+                const status = res.fmi || 'UNKNOWN';
+                const statusEl = document.getElementById('resStatus');
+                statusEl.innerText = status;
+                statusEl.className = 'chip ' + (status === 'OFF' ? 'chip-off' : (status === 'ON' ? 'chip-on' : ''));
+                
+                document.getElementById('resAccount').innerText = res.apple_account || 'N/A';
+                document.getElementById('resDate').innerText = formatFmiDate(res.date_of_purchase);
+                document.getElementById('resWarranty').innerText = res.limited_warranty === 'Y' ? 'Active' : 'Expired';
+
+                resultContainer.classList.remove('hidden');
+            } catch (err) {
+                errorBox.innerText = err.message;
+                errorBox.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+                checkBtn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>
